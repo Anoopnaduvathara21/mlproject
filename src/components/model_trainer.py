@@ -19,25 +19,27 @@ from src.logger import logging
 
 from src.utils import save_object, evaluate_models
 
-@dataclass
+@dataclass                                  #Simple dataclass holding where the trained model will be saved
 class ModelTrainerConfig:
     trained_model_file_path = os.path.join("artifacts","model.pkl")
 
-class ModelTrainer:
+class ModelTrainer:                       #Instantiate config when the trainer is created
     def __init__(self):
         self.model_trainer_config=ModelTrainerConfig()
         
-    def initiate_model_trainer(self,train_array,test_array):
+    def initiate_model_trainer(self,train_array,test_array):           #initiate_model_trainer(self, train_array, test_array)
+
+                                                
         try:
-            logging.info("spliting training and test input data")
+            logging.info("spliting training and test input data")    # 1) Split features/target from the arrays
             X_train,y_train,X_test,y_test = (
                 train_array[:,:-1],
                 train_array[:,-1],
                 test_array[:,:-1],
-                test_array[:,-1]
+                test_array[:,-1]                                      #Assumes last column is the target; everything before it is features
 
             )
-            models = {
+            models = {                                                #2) Define candidate models
                 "Random Forest": RandomForestRegressor(),
                 "Decision Tree": DecisionTreeRegressor(),
                 "Gradient Boosting": GradientBoostingRegressor(),
@@ -45,10 +47,10 @@ class ModelTrainer:
                 "K-Neighbors Regressor": KNeighborsRegressor(),
                 "XGBRegressor": XGBRegressor(),
                 "CatBoosting Regressor": CatBoostRegressor(verbose=False),
-                "AdaBoost Regressor": AdaBoostRegressor(),
+                "AdaBoost Regressor": AdaBoostRegressor(),                        #A registry of estimators to try
             }
 
-            params = {
+            params = {                                          #3) Define hyperparameter grids
                 "Random Forest": {
                     'n_estimators': [8, 16, 32, 64, 128, 256]
                 },
@@ -77,36 +79,51 @@ class ModelTrainer:
                     'learning_rate': [.1, .01, 0.5, .001],
                     'n_estimators': [8, 16, 32, 64, 128, 256]
                 }
-            }
+            }                                                      #Search space for each model (empty dict = use defaults)
 
 
-            model_report:dict = evaluate_models(X_train = X_train, y_train = y_train, 
+            model_report:dict = evaluate_models(X_train = X_train, y_train = y_train,       #4) Evaluate all models
                                                X_test = X_test, y_test = y_test, models=models,param = params)
             
-            ## to get bst model from the dict
-            best_model_score = max(sorted(model_report.values()))
+            ## to get bst model from the dict                         
+            best_model_score = max(sorted(model_report.values()))    
+                                                                   
+            """
+            Expects a dict like {model_name: score} after tuning/evaluation
 
-            ##to get the best model name from the dict
+
+(Important: your evaluate_models must fit models—often via GridSearchCV—and either return scores and keep fitted estimators in-place,
+ or return the best estimator. This script assumes the objects in models end up fitted.)
+ """                                                     
+            ##to get the best model name from the dict 5) Pick the best model by score
             best_model_name = list(model_report.keys())[
                 list(model_report.values()).index(best_model_score)
             ]
-            best_model =models[best_model_name]
+            best_model =models[best_model_name]        #Finds the top score and retrieves the corresponding estimator from models
 
-            if best_model_score<0.6:
-                raise CustomException("no best mode found")
+            if best_model_score<0.6:                          #6) Guardrail: require minimum quality 
+                raise CustomException("no best mode found")   #Fails fast if R² (presumably) is too low
             
             logging.info(f"best found model on both training and testing dataset")
 
-            save_object(
+            save_object(                         #7) Persist the model
                 file_path=self.model_trainer_config.trained_model_file_path,
                 obj=best_model
-            ) 
+            )                         #Dumps the (fitted) estimator to artifacts/model.pkl
 
-            predicted = best_model.predict(X_test)
+            predicted = best_model.predict(X_test)         #8) Final metric
 
             r2_square = r2_score(y_test, predicted)
-            return r2_square
+            return r2_square          #Computes R² on the test set and returns it
 
              
         except Exception as e:
             raise CustomException(e,sys)   
+        """Micro-notes to keep in mind
+
+The code relies on evaluate_models to fit models (and, by side effect, the chosen best_model). 
+If evaluate_models returns only scores but doesnt fit/assign back, best_model.predict(...) would error. 
+Make sure your evaluate_models fits and leaves the best estimator ready to use (or returns it).
+
+The selection uses the max score from model_report; ensure all scores are comparable (same metric and direction).
+"""

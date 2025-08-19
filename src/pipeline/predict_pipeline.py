@@ -8,7 +8,7 @@ class PredictPipeline:
     def __init__(self):
         pass
 
-    def predict(self,features):
+    def predict(self,features):                                   #
         try:
             model_path=os.path.join("artifacts","model.pkl")
             preprocessor_path=os.path.join('artifacts','preprocessor.pkl')
@@ -22,7 +22,20 @@ class PredictPipeline:
         
         except Exception as e:
             raise CustomException(e,sys)
+"""Build paths to persisted artifacts (model.pkl, preprocessor.pkl)
+.
 
+Load both with load_object(...) (raises CustomException on failure)
+.
+
+Transform incoming features using the saved preprocessor (must have same columns/order)
+.
+
+Predict with the loaded model and return the predictions (usually np.ndarray)
+.
+
+If anything fails, its wrapped and re-thrown as CustomException(e, sys) in the except block
+"""
 
 
 class CustomData:
@@ -47,7 +60,7 @@ class CustomData:
 
         self.reading_score = reading_score
 
-        self.writing_score = writing_score
+        self.writing_score = writing_score  #Stores raw user inputs as attributes; types are annotated for clarity (some untyped, but accepted by Python)
 
     def get_data_as_data_frame(self):
         try:
@@ -65,3 +78,7 @@ class CustomData:
 
         except Exception as e:
             raise CustomException(e, sys)
+"""Wraps scalar fields into single-row lists → constructs a 1×N DataFrame with column names that match training-time preprocessing
+.
+
+This DataFrame is what you pass to PredictPipeline().predict(df)."""
